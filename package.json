@@ -1,0 +1,141 @@
+{
+	"name": "ts-sematic-highlighting",
+	"displayName": "vscode-ts-sematic-highlight",
+	"description": "sematic highlight for typescript",
+	"version": "0.0.1",
+	"engines": {
+		"vscode": "^1.33.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onLanguage:javascript",
+		"onLanguage:javascriptreact",
+		"onLanguage:typescript",
+		"onLanguage:typescriptreact",
+		"onLanguage:jsx-tags",
+		"onCommand:typescript.reloadProjects",
+		"onCommand:javascript.reloadProjects",
+		"onCommand:typescript.selectTypeScriptVersion",
+		"onCommand:javascript.goToProjectConfig",
+		"onCommand:typescript.goToProjectConfig",
+		"onCommand:typescript.openTsServerLog",
+		"onCommand:workbench.action.tasks.runTask",
+		"onCommand:_typescript.configurePlugin",
+		"onLanguage:jsonc"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"configuration": {
+			"type": "object",
+			"title": "sematic-highlighting-ts",
+			"properties": {
+				"ts-highlighting.colors.typeParameter": {
+					"type": "array",
+					"default": [
+						"#587d87",
+						"#26cdca",
+						"#397797",
+						"#57c2cc",
+						"#306b72",
+						"#6cbcdf",
+						"#368896",
+						"#3ea0d2",
+						"#48a5af",
+						"#7ca6b7"
+					]
+				},
+				"ts-highlighting.colors.typeAlias": {
+					"type": "array",
+					"default": [
+						"#e1afc3",
+						"#d533bb",
+						"#9b677f",
+						"#e350b6",
+						"#a04360",
+						"#dd82bc",
+						"#de3864",
+						"#ad3f87",
+						"#dd7a90",
+						"#e0438a"
+					]
+				},
+				"ts-highlighting.colors.functionScopedVariable": {
+					"type": "array",
+					"default": [
+						"#587d87",
+						"#26cdca",
+						"#397797",
+						"#57c2cc",
+						"#306b72",
+						"#6cbcdf",
+						"#368896",
+						"#3ea0d2",
+						"#48a5af",
+						"#7ca6b7"
+					]
+				},
+				"ts-highlighting.colors.variable": {
+					"type": "array",
+					"default": [
+						"#587d87",
+						"#26cdca",
+						"#397797",
+						"#57c2cc",
+						"#306b72",
+						"#6cbcdf",
+						"#368896",
+						"#3ea0d2",
+						"#48a5af",
+						"#7ca6b7"
+					]
+				},
+				"ts.highlighting.colors.enums": {
+					"type": "array",
+					"default": [
+						"#e1afc3",
+						"#d533bb",
+						"#9b677f",
+						"#e350b6",
+						"#a04360",
+						"#dd82bc",
+						"#de3864",
+						"#ad3f87",
+						"#dd7a90",
+						"#e0438a"
+					]
+				},
+				"ts.highlighting.colors.enumsConstants": {
+					"type": "array",
+					"default": [
+						"#587d87",
+						"#26cdca",
+						"#397797",
+						"#57c2cc",
+						"#306b72",
+						"#6cbcdf",
+						"#368896",
+						"#3ea0d2",
+						"#48a5af",
+						"#7ca6b7"
+					]
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "yarn run compile",
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./",
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"test": "yarn run compile && node ./node_modules/vscode/bin/test"
+	},
+	"devDependencies": {
+		"typescript": "^3.3.1",
+		"vscode": "^1.1.28",
+		"tslint": "^5.12.1",
+		"@types/node": "^10.12.21",
+		"@types/mocha": "^2.2.42"
+	}
+}

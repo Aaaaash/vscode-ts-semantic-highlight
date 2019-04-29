@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import * as ts from "typescript";
 
-const SematicHighlightFlags = {
+const semanticHighlightFlags = {
 	FunctionScopedVariable: 1,
 	BlockScopedVariable: 2,
 	Variable: 3,
@@ -41,9 +41,9 @@ interface SimpleSymbol {
 	parentKind: number,
 }
 
-function isNeedSematic(flag: number) {
+function isNeedsemantic(flag: number) {
 	// @ts-ignore
-	return Object.keys(SematicHighlightFlags).find((key: string) => SematicHighlightFlags[key] === flag);
+	return Object.keys(semanticHighlightFlags).find((key: string) => semanticHighlightFlags[key] === flag);
 }
 
 interface TextEditorDecoration {
@@ -73,12 +73,12 @@ function setDecorations(textEditor: vscode.TextEditor, decorations: TextEditorDe
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
-	const logger = vscode.window.createOutputChannel('sematic-highlighting-ts');
+	const logger = vscode.window.createOutputChannel('semantic-highlighting-ts');
 	const cachedDecorations = new Map<string, Array<TextEditorDecoration>>();
 
 	function visitor(typeChecker: ts.TypeChecker, node: ts.Node, symbols: SimpleSymbol[]) {
 		const symbol = typeChecker.getSymbolAtLocation(node);
-		if (symbol && isNeedSematic(symbol.flags)) {
+		if (symbol && isNeedsemantic(symbol.flags)) {
 			symbols.push({
 				text: symbol.name,
 				range: {
@@ -103,14 +103,14 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	}
 
-	const config = vscode.workspace.getConfiguration("sematic-highlighting-ts");
+	const config = vscode.workspace.getConfiguration("semantic-highlighting-ts");
 	function makeDecoration(symbols: SimpleSymbol[]): TextEditorDecoration[] {
 		const decorations = [];
 		console.log(config);
 		for (const symbol of symbols) {
 			if (
-				symbol.kind === SematicHighlightFlags.TypeParameter ||
-				symbol.kind === SematicHighlightFlags.TypeAlias
+				symbol.kind === semanticHighlightFlags.TypeParameter ||
+				symbol.kind === semanticHighlightFlags.TypeAlias
 			) {
 				const color = config.get("ts-highlighting.colors.typeParameter", "#d8cb9a") || "#d8cb9a";
 				const decoration = makeDecorationType(color, true, "normal");
@@ -119,9 +119,9 @@ export function activate(context: vscode.ExtensionContext) {
 					range: symbol.range,
 				});
 			} else if (
-				symbol.kind === SematicHighlightFlags.BlockScopedVariable ||
-				symbol.kind === SematicHighlightFlags.Type ||
-				symbol.kind === SematicHighlightFlags.Variable
+				symbol.kind === semanticHighlightFlags.BlockScopedVariable ||
+				symbol.kind === semanticHighlightFlags.Type ||
+				symbol.kind === semanticHighlightFlags.Variable
 			) {
 				const color = config.get("ts-highlighting.colors.variable", "#b6b9ea") || "#b6b9ea";
 				const decoration = makeDecorationType(color, false, "normal");
@@ -131,20 +131,20 @@ export function activate(context: vscode.ExtensionContext) {
 				});
 
 			} else if (
-				symbol.kind === SematicHighlightFlags.FunctionScopedVariable
+				symbol.kind === semanticHighlightFlags.FunctionScopedVariable
 			) {
 				const color = config.get("ts-highlighting.colors.functionScopedVariable", "#eaacbf") || "#eaacbf";
 				const decoration = makeDecorationType(color, false, "italic");
 				decorations.push({ range: symbol.range, decoration });
 			} else if (
-				symbol.kind === SematicHighlightFlags.Enum ||
-				symbol.kind === SematicHighlightFlags.ConstEnum
+				symbol.kind === semanticHighlightFlags.Enum ||
+				symbol.kind === semanticHighlightFlags.ConstEnum
 			) {
 				const color = config.get("ts-highlighting.colors.enums", "#77d1e5") || "#77d1e5";
 				const decoration = makeDecorationType(color, false, "normal");
 				decorations.push({ range: symbol.range, decoration });
 			} else if (
-				symbol.kind === SematicHighlightFlags.EnumMember
+				symbol.kind === semanticHighlightFlags.EnumMember
 			) {
 				const color = config.get("ts-highlighting.colors.enums", "#ebaea7") || "#ebaea7";
 				const decoration = makeDecorationType(color, false, "normal");
@@ -172,14 +172,14 @@ export function activate(context: vscode.ExtensionContext) {
 						const program = ts.createProgram([document.fileName], ts.getDefaultCompilerOptions());
 						const typeChecker = program.getTypeChecker();
 						const sourceFile = program.getSourceFile(document.fileName);
-						const sematicSymbols: SimpleSymbol[] = [];
+						const semanticSymbols: SimpleSymbol[] = [];
 						if (sourceFile) {
-							visitor(typeChecker, sourceFile, sematicSymbols);
+							visitor(typeChecker, sourceFile, semanticSymbols);
 	
-							if (sematicSymbols.length > 0) {
+							if (semanticSymbols.length > 0) {
 								for (const textEditor of vscode.window.visibleTextEditors) {
 									if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {
-										const decorations = makeDecoration(sematicSymbols);
+										const decorations = makeDecoration(semanticSymbols);
 										cachedDecorations.set(document.uri.toString(), decorations);
 										setDecorations(editor, decorations);
 									}

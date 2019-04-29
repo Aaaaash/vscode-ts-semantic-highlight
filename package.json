@@ -1,7 +1,9 @@
 {
-	"name": "ts-sematic-highlighting",
-	"displayName": "vscode-ts-sematic-highlight",
-	"description": "sematic highlight for typescript",
+	"name": "ts-semantic-highlighting",
+	"displayName": "Semantic highlight - TypeScript",
+	"description": "semantic highlight for typescript",
+	"author": "Aaaaash<binshao54@gmail.com>",
+	"publisher": "aaaaash",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.33.0"
@@ -9,6 +11,10 @@
 	"categories": [
 		"Other"
 	],
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:Aaaaash/vscode-ts-semantic-highlight.git"
+	},
 	"activationEvents": [
 		"onLanguage:javascript",
 		"onLanguage:javascriptreact",
@@ -29,7 +35,7 @@
 	"contributes": {
 		"configuration": {
 			"type": "object",
-			"title": "sematic-highlighting-ts",
+			"title": "semantic-highlighting-ts",
 			"properties": {
 				"ts-highlighting.colors.typeParameter": {
 					"type": "array",

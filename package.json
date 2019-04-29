@@ -4,7 +4,7 @@
 	"description": "semantic highlight for typescript",
 	"author": "Aaaaash<binshao54@gmail.com>",
 	"publisher": "aaaaash",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"engines": {
 		"vscode": "^1.33.0"
 	},
@@ -138,10 +138,12 @@
 		"test": "yarn run compile && node ./node_modules/vscode/bin/test"
 	},
 	"devDependencies": {
-		"typescript": "^3.3.1",
-		"vscode": "^1.1.28",
-		"tslint": "^5.12.1",
+		"@types/mocha": "^2.2.42",
 		"@types/node": "^10.12.21",
-		"@types/mocha": "^2.2.42"
+		"tslint": "^5.12.1",
+		"vscode": "^1.1.28"
+	},
+	"dependencies": {
+		"typescript": "^3.4.5"
 	}
 }

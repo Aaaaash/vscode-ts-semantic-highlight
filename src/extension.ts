@@ -3,47 +3,26 @@
 import * as vscode from 'vscode';
 import * as ts from "typescript";
 
-const semanticHighlightFlags = {
-	FunctionScopedVariable: 1,
-	BlockScopedVariable: 2,
-	Variable: 3,
-	Enum: 384,
-	ConstEnum: 128,
-	EnumMember: 8,
-	Method: 8192,
-	GetAccessor: 32768,
-	SetAccessor: 65536,
-	Signature: 131072,
-	TypeParameter: 262144,
-	TypeAlias: 524288,
-	Alias: 2097152,
-	Type: 67897832,
-	ExportStar: 8388608,
-	Optional: 16777216,
-	FunctionScopedVariableExcludes: 67220414,
-	BlockScopedVariableExcludes: 67220415,
-	ParameterExcludes: 67220415,
-	EnumMemberExcludes: 68008959,
-	FunctionExcludes: 67219887,
-	NamespaceModuleExcludes: 0,
-	GetAccessorExcludes: 67154879,
-	SetAccessorExcludes: 67187647,
-	TypeParameterExcludes: 67635688,
-	TypeAliasExcludes: 67897832,
-	AliasExcludes: 2097152,
-	PropertyOrAccessor: 98308,
-}
+import { logger } from "./logger";
+import { minProperty, maxProperty } from "./utils";
+import { semanticHighlightFlags } from "./common";
 
 interface SimpleSymbol {
 	range: { start: number, end: number };
 	kind: number;
 	text: string;
-	parentKind: number,
 }
 
 function isNeedsemantic(flag: number) {
 	// @ts-ignore
 	return Object.keys(semanticHighlightFlags).find((key: string) => semanticHighlightFlags[key] === flag);
+}
+
+const maxTextChangeBufferLength = 20;
+
+interface TextChangeBufferItem {
+	start: number;
+	end: number;
 }
 
 interface TextEditorDecoration {
@@ -69,16 +48,35 @@ function setDecorations(textEditor: vscode.TextEditor, decorations: TextEditorDe
 	}
 }
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+function findChildrenByRange(node: ts.Node, fileName: string, range: { start: number, end: number }, children: ts.Node[]) {
+	ts.forEachChild(node, (child: ts.Node) => {
+		const { pos, end } = child;
 
-	const logger = vscode.window.createOutputChannel('semantic-highlighting-ts');
-	const cachedDecorations = new Map<string, Array<TextEditorDecoration>>();
+		// const sourceFile = child.getSourceFile();
+		if (pos <= range.start && end >= range.end) {
+			logger.appendLine(`start: ${child.pos}, end: ${range.end}`);
+			children.push(child);
+			findChildrenByRange(child, fileName, range, children);
+		}
+	});
+}
 
-	function visitor(typeChecker: ts.TypeChecker, node: ts.Node, symbols: SimpleSymbol[]) {
-		const symbol = typeChecker.getSymbolAtLocation(node);
-		if (symbol && isNeedsemantic(symbol.flags)) {
+function makeDecorationType(color: string, bold: boolean, fontStyle: string): vscode.TextEditorDecorationType {
+	return vscode.window.createTextEditorDecorationType({
+		rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
+		color,
+		fontWeight: bold ? "bold" : "normal",
+		fontStyle,
+	});
+}
+
+
+function visitor(typeChecker: ts.TypeChecker, node: ts.Node, symbols: SimpleSymbol[]) {
+	let symbol;
+	try {
+		symbol = typeChecker.getSymbolAtLocation(node);
+		if (symbol) {
+
 			symbols.push({
 				text: symbol.name,
 				range: {
@@ -86,27 +84,28 @@ export function activate(context: vscode.ExtensionContext) {
 					end: node.end,
 				},
 				kind: symbol.flags,
-				parentKind: node.parent.kind,
 			});
 		}
 		ts.forEachChild(node, (child) => {
 			visitor(typeChecker, child, symbols);
 		});
+	} catch(e) {
+		console.error(e.message || "Can't found symbol!");
 	}
+}
 
-	function makeDecorationType(color: string, bold: boolean, fontStyle: string): vscode.TextEditorDecorationType {
-		return vscode.window.createTextEditorDecorationType({
-			rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
-			color,
-			fontWeight: bold ? "bold" : "normal",
-			fontStyle,
-		});
-	}
+// this method is called when your extension is activated
+// your extension is activated the very first time the command is executed
+export function activate(context: vscode.ExtensionContext) {
+
+	const cachedDecorations = new Map<string, Array<TextEditorDecoration>>();
+	const sourceFiles = new Map<string, ts.SourceFile>();
+	const typeCheckers = new Map<string, ts.TypeChecker>();
+	let textChangeBuffer = new Map<string, Array<TextChangeBufferItem>>();
 
 	const config = vscode.workspace.getConfiguration("semantic-highlighting-ts");
 	function makeDecoration(symbols: SimpleSymbol[]): TextEditorDecoration[] {
 		const decorations = [];
-		console.log(config);
 		for (const symbol of symbols) {
 			if (
 				symbol.kind === semanticHighlightFlags.TypeParameter ||
@@ -154,6 +153,90 @@ export function activate(context: vscode.ExtensionContext) {
 		return decorations;
 	}
 
+	function doIncrementalHighlight(editor: vscode.TextEditor, changesBuffer: TextChangeBufferItem[], document: vscode.TextDocument) {
+		const minStart = minProperty(changesBuffer, "start");
+		const maxEnd = maxProperty(changesBuffer, "end");
+
+		console.log(`start: ${minStart} - end: ${maxEnd}`);
+		const uriString = document.uri.toString();
+
+		const typeChecker = typeCheckers.get(uriString);
+		const sourceFile = sourceFiles.get(uriString);
+
+		if (sourceFile) {
+			const textChangeRange = ts.createTextChangeRange(
+				ts.createTextSpan(0, sourceFile.getFullText().length),
+				document.getText().length,
+			);
+
+			const newSourceFile = ts.updateSourceFile(
+				sourceFile,
+				document.getText(),
+				textChangeRange,
+				true
+			);
+			sourceFiles.set(uriString, newSourceFile);
+			const node = newSourceFile.statements.find((child) => child.pos <= minStart && child.end >= maxEnd);
+			if (node && typeChecker) {
+				const semanticSymbols: SimpleSymbol[] = [];
+				visitor(typeChecker, newSourceFile, semanticSymbols);
+				if (semanticSymbols.length > 0) {
+					for (const textEditor of vscode.window.visibleTextEditors) {
+						if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {
+							const decorations = makeDecoration(semanticSymbols);
+							cachedDecorations.set(document.uri.toString(), decorations);
+							setDecorations(editor, decorations);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	function handleTextDocumentChange(e: vscode.TextDocumentChangeEvent) {
+		if (e.document.uri.scheme !== "file") {
+			return;
+		}
+
+		const { document, contentChanges } = e;
+		const urlString = document.uri.toString();
+		const currentEditor = vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === urlString);
+		if (currentEditor) {
+			const sourceFile = sourceFiles.get(urlString);
+			if (!sourceFile) {
+				logger.appendLine("[ERROR] - We lost document!");
+				return;
+			}
+			const changesBuffer: Array<TextChangeBufferItem> = [];
+			for (const change of contentChanges) {
+				const { range } = change;
+
+				const start = document.offsetAt(new vscode.Position(range.start.line, range.start.character));
+				const end = document.offsetAt(new vscode.Position(range.end.line, range.end.character));
+				logger.appendLine(`Trigger - ${e.document.uri.toString()}, start: ${start} end: ${end}`);
+				changesBuffer.push({ start, end });
+			}
+
+			const existBuffer = textChangeBuffer.get(urlString);
+
+			if (existBuffer) {
+				const newBuffer = existBuffer.concat(changesBuffer);
+				
+				if (newBuffer.length >= maxTextChangeBufferLength) {
+					doIncrementalHighlight(currentEditor, newBuffer, document);
+					textChangeBuffer.delete(urlString);
+				} else {
+					textChangeBuffer.set(urlString, newBuffer);
+				}
+			} else {
+				textChangeBuffer.set(urlString, changesBuffer);
+			}
+		}
+	}
+
+	// const throttledEventHandler = throttle(handleTextDocumentChange, 500);
+	vscode.workspace.onDidChangeTextDocument(handleTextDocumentChange);
+
 	vscode.window.onDidChangeActiveTextEditor(
 		(editor?: vscode.TextEditor) => {
 			if (editor) {
@@ -171,17 +254,22 @@ export function activate(context: vscode.ExtensionContext) {
 					} else {
 						const program = ts.createProgram([document.fileName], ts.getDefaultCompilerOptions());
 						const typeChecker = program.getTypeChecker();
-						const sourceFile = program.getSourceFile(document.fileName);
-						const semanticSymbols: SimpleSymbol[] = [];
+						typeCheckers.set(document.uri.toString(), typeChecker);
+						const sourceFile = sourceFiles.get(document.uri.toString()) || program.getSourceFile(document.fileName);
 						if (sourceFile) {
-							visitor(typeChecker, sourceFile, semanticSymbols);
-	
-							if (semanticSymbols.length > 0) {
-								for (const textEditor of vscode.window.visibleTextEditors) {
-									if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {
-										const decorations = makeDecoration(semanticSymbols);
-										cachedDecorations.set(document.uri.toString(), decorations);
-										setDecorations(editor, decorations);
+							console.log(sourceFile.statements);
+							sourceFiles.set(document.uri.toString(), sourceFile);
+							const semanticSymbols: SimpleSymbol[] = [];
+							if (sourceFile) {
+								visitor(typeChecker, sourceFile, semanticSymbols);
+
+								if (semanticSymbols.length > 0) {
+									for (const textEditor of vscode.window.visibleTextEditors) {
+										if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {
+											const decorations = makeDecoration(semanticSymbols);
+											cachedDecorations.set(document.uri.toString(), decorations);
+											setDecorations(editor, decorations);
+										}
 									}
 								}
 							}
@@ -195,4 +283,4 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }

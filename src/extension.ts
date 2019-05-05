@@ -244,7 +244,16 @@ export function activate(context: vscode.ExtensionContext) {
 					if (cachedDecoration) {
 						setDecorations(editor, cachedDecoration);
 					} else {
-						const program = ts.createProgram([document.fileName], ts.getDefaultCompilerOptions());
+						const defaultCompilerOptions = ts.getDefaultCompilerOptions();
+						console.log(defaultCompilerOptions);
+						const program = ts.createProgram(
+							[document.fileName],
+							{
+								...defaultCompilerOptions,
+								checkJs: true,
+								allowJs: true,
+							}
+						);
 						const typeChecker = program.getTypeChecker();
 						typeCheckers.set(document.uri.toString(), typeChecker);
 						const sourceFile = sourceFiles.get(document.uri.toString()) || program.getSourceFile(document.fileName);
@@ -253,7 +262,6 @@ export function activate(context: vscode.ExtensionContext) {
 							const semanticSymbols: SimpleSymbol[] = [];
 							if (sourceFile) {
 								visitor(typeChecker, sourceFile, semanticSymbols);
-
 								if (semanticSymbols.length > 0) {
 									for (const textEditor of vscode.window.visibleTextEditors) {
 										if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {

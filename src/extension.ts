@@ -245,7 +245,6 @@ export function activate(context: vscode.ExtensionContext) {
 						setDecorations(editor, cachedDecoration);
 					} else {
 						const defaultCompilerOptions = ts.getDefaultCompilerOptions();
-						console.log(defaultCompilerOptions);
 						const program = ts.createProgram(
 							[document.fileName],
 							{

@@ -23,6 +23,8 @@ const maxTextChangeBufferLength = 20;
 interface TextChangeBufferItem {
 	start: number;
 	end: number;
+	text: string;
+	fullText: string;
 }
 
 interface TextEditorDecoration {
@@ -72,26 +74,23 @@ function makeDecorationType(color: string, bold: boolean, fontStyle: string): vs
 
 
 function visitor(typeChecker: ts.TypeChecker, node: ts.Node, symbols: SimpleSymbol[]) {
-	let symbol;
-	try {
-		symbol = typeChecker.getSymbolAtLocation(node);
+	ts.forEachChild(node, (child) => {
+		const symbol = typeChecker.getSymbolAtLocation(child);
 		if (symbol) {
 
 			symbols.push({
 				text: symbol.name,
 				range: {
-					start: node.pos,
-					end: node.end,
+					start: child.pos,
+					end: child.end,
 				},
 				kind: symbol.flags,
 			});
 		}
-		ts.forEachChild(node, (child) => {
-			visitor(typeChecker, child, symbols);
-		});
-	} catch(e) {
-		console.error(e.message || "Can't found symbol!");
-	}
+		
+		visitor(typeChecker, child, symbols);
+	});
+
 }
 
 // this method is called when your extension is activated
@@ -154,41 +153,35 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	function doIncrementalHighlight(editor: vscode.TextEditor, changesBuffer: TextChangeBufferItem[], document: vscode.TextDocument) {
-		const minStart = minProperty(changesBuffer, "start");
-		const maxEnd = maxProperty(changesBuffer, "end");
-
-		console.log(`start: ${minStart} - end: ${maxEnd}`);
 		const uriString = document.uri.toString();
-
 		const typeChecker = typeCheckers.get(uriString);
-		const sourceFile = sourceFiles.get(uriString);
+		let newSourceFile = sourceFiles.get(uriString);
+		if (newSourceFile && typeChecker) {
+			for (const changeBuffer of changesBuffer) {
+				const { start, end, text, fullText } = changeBuffer;
+				const newLength = fullText.length;
+				const textChangeRange = ts.createTextChangeRange(
+					ts.createTextSpan(
+						0,
+						newSourceFile.text.length,
+					),
+					newLength,
+				);
+				newSourceFile = ts.updateSourceFile(
+					newSourceFile,
+					fullText,
+					textChangeRange,
+				);
+			}
 
-		if (sourceFile) {
-			const textChangeRange = ts.createTextChangeRange(
-				ts.createTextSpan(0, sourceFile.getFullText().length),
-				document.getText().length,
-			);
-
-			const newSourceFile = ts.updateSourceFile(
-				sourceFile,
-				document.getText(),
-				textChangeRange,
-				true
-			);
-			sourceFiles.set(uriString, newSourceFile);
-			const node = newSourceFile.statements.find((child) => child.pos <= minStart && child.end >= maxEnd);
-			if (node && typeChecker) {
-				const semanticSymbols: SimpleSymbol[] = [];
-				visitor(typeChecker, newSourceFile, semanticSymbols);
-				if (semanticSymbols.length > 0) {
-					for (const textEditor of vscode.window.visibleTextEditors) {
-						if (textEditor && textEditor.document.uri.toString() === document.uri.toString()) {
-							const decorations = makeDecoration(semanticSymbols);
-							cachedDecorations.set(document.uri.toString(), decorations);
-							setDecorations(editor, decorations);
-						}
-					}
-				}
+			const semanticSymbols: SimpleSymbol[] = [];
+			for (const statement of newSourceFile.statements) {
+				visitor(typeChecker, statement, semanticSymbols);
+			}
+			if (semanticSymbols.length > 0) {
+				const decorations = makeDecoration(semanticSymbols);
+				cachedDecorations.set(document.uri.toString(), decorations);
+				setDecorations(editor, decorations);
 			}
 		}
 	}
@@ -209,19 +202,18 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			const changesBuffer: Array<TextChangeBufferItem> = [];
 			for (const change of contentChanges) {
-				const { range } = change;
+				const { range, text } = change;
 
-				const start = document.offsetAt(new vscode.Position(range.start.line, range.start.character));
-				const end = document.offsetAt(new vscode.Position(range.end.line, range.end.character));
-				logger.appendLine(`Trigger - ${e.document.uri.toString()}, start: ${start} end: ${end}`);
-				changesBuffer.push({ start, end });
+				const changesStart = document.offsetAt(new vscode.Position(range.start.line, range.start.character));
+				const changesEnd = document.offsetAt(new vscode.Position(range.end.line, range.end.character));
+				changesBuffer.push({ start: changesStart, end: changesEnd, text, fullText: document.getText(), });
 			}
 
 			const existBuffer = textChangeBuffer.get(urlString);
 
 			if (existBuffer) {
 				const newBuffer = existBuffer.concat(changesBuffer);
-				
+
 				if (newBuffer.length >= maxTextChangeBufferLength) {
 					doIncrementalHighlight(currentEditor, newBuffer, document);
 					textChangeBuffer.delete(urlString);
@@ -257,7 +249,6 @@ export function activate(context: vscode.ExtensionContext) {
 						typeCheckers.set(document.uri.toString(), typeChecker);
 						const sourceFile = sourceFiles.get(document.uri.toString()) || program.getSourceFile(document.fileName);
 						if (sourceFile) {
-							console.log(sourceFile.statements);
 							sourceFiles.set(document.uri.toString(), sourceFile);
 							const semanticSymbols: SimpleSymbol[] = [];
 							if (sourceFile) {

@@ -4,7 +4,7 @@
 	"description": "semantic highlight for typescript",
 	"author": "Aaaaash<binshao54@gmail.com>",
 	"publisher": "aaaaash",
-	"version": "0.0.2",
+	"version": "0.0.4",
 	"engines": {
 		"vscode": "^1.33.0"
 	},

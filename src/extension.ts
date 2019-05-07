@@ -75,6 +75,9 @@ function makeDecorationType(color: string, bold: boolean, fontStyle: string): vs
 
 function visitor(typeChecker: ts.TypeChecker, node: ts.Node, symbols: SimpleSymbol[]) {
 	ts.forEachChild(node, (child) => {
+		if (!child.parent) {
+			child.parent = node;
+		}
 		const symbol = typeChecker.getSymbolAtLocation(child);
 		if (symbol) {
 
@@ -154,35 +157,35 @@ export function activate(context: vscode.ExtensionContext) {
 
 	function doIncrementalHighlight(editor: vscode.TextEditor, changesBuffer: TextChangeBufferItem[], document: vscode.TextDocument) {
 		const uriString = document.uri.toString();
-		const typeChecker = typeCheckers.get(uriString);
-		let newSourceFile = sourceFiles.get(uriString);
+		const defaultCompilerOptions = ts.getDefaultCompilerOptions();
+		const program = ts.createProgram(
+			[document.fileName],
+			{
+				...defaultCompilerOptions,
+				checkJs: true,
+				allowJs: true,
+			}
+		);
+		const typeChecker = program.getTypeChecker();
+		const newSourceFile = program.getSourceFile(document.fileName);
 		if (newSourceFile && typeChecker) {
-			for (const changeBuffer of changesBuffer) {
-				const { start, end, text, fullText } = changeBuffer;
-				const newLength = fullText.length;
-				const textChangeRange = ts.createTextChangeRange(
-					ts.createTextSpan(
-						0,
-						newSourceFile.text.length,
-					),
-					newLength,
-				);
-				newSourceFile = ts.updateSourceFile(
-					newSourceFile,
-					fullText,
-					textChangeRange,
-				);
-			}
-
 			const semanticSymbols: SimpleSymbol[] = [];
-			for (const statement of newSourceFile.statements) {
-				visitor(typeChecker, statement, semanticSymbols);
-			}
+			visitor(typeChecker, newSourceFile, semanticSymbols);
 			if (semanticSymbols.length > 0) {
 				const decorations = makeDecoration(semanticSymbols);
 				cachedDecorations.set(document.uri.toString(), decorations);
 				setDecorations(editor, decorations);
 			}
+		}
+	}
+
+	function handleTextDocumentSave(document: vscode.TextDocument) {
+		const uriString = document.uri.toString();
+		const changeBuffer = textChangeBuffer.get(uriString);
+		const currentEditor = vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === uriString);
+		if (changeBuffer && currentEditor && currentEditor.document.uri.toString() === uriString) {
+			doIncrementalHighlight(currentEditor, changeBuffer, document);
+			textChangeBuffer.delete(uriString);
 		}
 	}
 
@@ -213,13 +216,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			if (existBuffer) {
 				const newBuffer = existBuffer.concat(changesBuffer);
-
-				if (newBuffer.length >= maxTextChangeBufferLength) {
-					doIncrementalHighlight(currentEditor, newBuffer, document);
-					textChangeBuffer.delete(urlString);
-				} else {
-					textChangeBuffer.set(urlString, newBuffer);
-				}
+				textChangeBuffer.set(urlString, newBuffer);
 			} else {
 				textChangeBuffer.set(urlString, changesBuffer);
 			}
@@ -227,9 +224,11 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	// const throttledEventHandler = throttle(handleTextDocumentChange, 500);
-	vscode.workspace.onDidChangeTextDocument(handleTextDocumentChange);
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(handleTextDocumentChange));
 
-	vscode.window.onDidChangeActiveTextEditor(
+	context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(handleTextDocumentSave));
+
+	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(
 		(editor?: vscode.TextEditor) => {
 			if (editor) {
 				const document = editor.document;
@@ -276,8 +275,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			}
 		}
-	)
-
+	))
 }
 
 // this method is called when your extension is deactivated

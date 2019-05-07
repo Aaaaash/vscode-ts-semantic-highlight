@@ -13,7 +13,10 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "git@github.com:Aaaaash/vscode-ts-semantic-highlight.git"
+		"url": "git+https://github.com/Aaaaash/vscode-ts-semantic-highlight.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Aaaaash/vscode-ts-semantic-highlight/issues"
 	},
 	"activationEvents": [
 		"onLanguage:javascript",

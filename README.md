@@ -16,8 +16,6 @@ VS Code 默认高亮
 
 ## Known Issues
 
-* 修改文本不会触发高亮更新
-
 ## Release Notes
 
 ### 0.0.1

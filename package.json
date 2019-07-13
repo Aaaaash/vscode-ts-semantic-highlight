@@ -148,7 +148,7 @@
 	},
 	"dependencies": {
 		"@types/lodash": "^4.14.123",
-		"lodash": "^4.17.11",
+		"lodash": "^4.17.13",
 		"typescript": "^3.4.5"
 	}
 }
